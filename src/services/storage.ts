@@ -19,6 +19,7 @@ import {
 import { sounds } from '../utils/sound';
 import { DEMO_PERSONAS, aiService } from './aiService';
 import { peerService } from './peerService';
+import { postgresService } from './supabase';
 
 const STORAGE_KEYS = {
   CURRENT_USER_ID: 'chattr_current_user_id',
@@ -150,6 +151,7 @@ class StorageService {
       users.push(user);
     }
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    postgresService.saveUser(user).catch(() => {});
   }
 
   // Contacts
@@ -182,6 +184,7 @@ class StorageService {
     };
     contacts.push(newContact);
     localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify(contacts));
+    postgresService.saveContact(newContact).catch(() => {});
     return newContact;
   }
 
@@ -285,6 +288,7 @@ class StorageService {
       users.push(user);
     }
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    postgresService.saveUser(user).catch(() => {});
   }
 
   receiveRemoteMessage(message: Message, senderUser: UserProfile) {
@@ -319,6 +323,7 @@ class StorageService {
     if (!messages.some((m) => m.id === message.id)) {
       messages.push(messageToSave);
       this.saveMessages(conv.id, messages);
+      postgresService.saveMessage(messageToSave).catch(() => {});
 
       conv.last_message = messageToSave;
       conv.unread_count = (conv.unread_count || 0) + 1;
@@ -367,6 +372,7 @@ class StorageService {
     const messages = this.getMessages(conversationId);
     messages.push(newMessage);
     this.saveMessages(conversationId, messages);
+    postgresService.saveMessage(newMessage).catch(() => {});
 
     const convs = this.getConversations();
     const c = convs.find((conv) => conv.id === conversationId);
