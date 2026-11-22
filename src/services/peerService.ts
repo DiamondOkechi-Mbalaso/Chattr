@@ -1,14 +1,21 @@
 import { Peer, DataConnection, MediaConnection } from 'peerjs';
 import { storage } from './storage';
-import { webrtc } from './webrtc';
-import { Message, UserProfile } from '../types';
+import { Message, UserProfile, CallType } from '../types';
 import { sounds } from '../utils/sound';
+
+// Callback type — set by webrtc.ts at init time to break the circular dependency
+type IncomingCallHandler = (mediaCall: MediaConnection, caller: UserProfile, type: CallType) => void;
 
 class PeerService {
   private peer: Peer | null = null;
   private connections: Map<string, DataConnection> = new Map();
-  private isConnected = false;
   private currentUsername: string = '';
+  private incomingCallHandler: IncomingCallHandler | null = null;
+
+  /** Called once by webrtc.ts so it can handle incoming PeerJS calls without a circular import */
+  public setIncomingCallHandler(handler: IncomingCallHandler) {
+    this.incomingCallHandler = handler;
+  }
 
   public init() {
     if (typeof window === 'undefined') return;
@@ -21,13 +28,10 @@ class PeerService {
     }
 
     if (this.peer) {
-      try {
-        this.peer.destroy();
-      } catch (e) {}
+      try { this.peer.destroy(); } catch (e) {}
     }
 
     this.currentUsername = current.username;
-    // Format a clean, unique peer ID prefixed with chattr_
     const cleanUser = current.username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
     const peerId = `chattr_${cleanUser}`;
 
@@ -42,9 +46,7 @@ class PeerService {
         },
       });
 
-      this.peer.on('open', (id) => {
-        this.isConnected = true;
-      });
+      this.peer.on('open', () => {});
 
       this.peer.on('connection', (conn) => {
         this.setupDataConnection(conn);
@@ -55,22 +57,18 @@ class PeerService {
       });
 
       this.peer.on('error', (err) => {
-        console.warn('PeerJS status/fallback:', err.type);
+        console.warn('PeerJS:', err.type);
       });
     } catch (e) {
-      console.warn('Peer initialization error:', e);
+      console.warn('Peer init error:', e);
     }
   }
 
   private setupDataConnection(conn: DataConnection) {
     conn.on('open', () => {
       this.connections.set(conn.peer, conn);
-      // Announce profile to remote peer
       const current = storage.getCurrentUser();
-      conn.send({
-        type: 'PROFILE_EXCHANGE',
-        user: current,
-      });
+      conn.send({ type: 'PROFILE_EXCHANGE', user: current });
     });
 
     conn.on('data', (data: any) => {
@@ -82,7 +80,7 @@ class PeerService {
     });
   }
 
-  private handleIncomingData(data: any, conn: DataConnection) {
+  private handleIncomingData(data: any, _conn: DataConnection) {
     if (!data || !data.type) return;
 
     switch (data.type) {
@@ -117,23 +115,17 @@ class PeerService {
           storage.upsertExternalUser(data.user);
         }
         break;
-
-      case 'CALL_SIGNAL':
-        if (data.payload) {
-          storage.broadcast(data.payload);
-        }
-        break;
     }
   }
 
   private handleIncomingCall(mediaCall: MediaConnection) {
-    // MediaCall metadata carries caller user info
     const caller: UserProfile = mediaCall.metadata?.caller || {
       id: 'peer_' + mediaCall.peer,
       username: mediaCall.peer.replace('chattr_', ''),
       display_name: mediaCall.metadata?.callerName || mediaCall.peer.replace('chattr_', ''),
       email: '',
-      avatar_url: mediaCall.metadata?.callerAvatar || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200`,
+      avatar_url: mediaCall.metadata?.callerAvatar ||
+        `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200`,
       bio: 'Chattr User',
       status_text: 'Online',
       status: 'online',
@@ -142,28 +134,23 @@ class PeerService {
       created_at: new Date().toISOString(),
     };
 
-    const callType = mediaCall.metadata?.callType || 'voice';
+    const callType: CallType = mediaCall.metadata?.callType || 'voice';
 
-    webrtc.handleIncomingPeerCall(mediaCall, caller, callType);
+    if (this.incomingCallHandler) {
+      this.incomingCallHandler(mediaCall, caller, callType);
+    }
   }
 
   public sendMessageToUser(targetUsername: string, message: Message): Promise<boolean> {
     return new Promise((resolve) => {
-      if (!this.peer) {
-        resolve(false);
-        return;
-      }
+      if (!this.peer) { resolve(false); return; }
 
       const cleanTarget = targetUsername.toLowerCase().replace(/[^a-z0-9_-]/g, '');
       const targetPeerId = `chattr_${cleanTarget}`;
 
       const sendPayload = (conn: DataConnection) => {
         try {
-          conn.send({
-            type: 'CHAT_MESSAGE',
-            message,
-            sender: storage.getCurrentUser(),
-          });
+          conn.send({ type: 'CHAT_MESSAGE', message, sender: storage.getCurrentUser() });
           resolve(true);
         } catch (e) {
           resolve(false);
@@ -176,12 +163,8 @@ class PeerService {
       } else {
         const conn = this.peer.connect(targetPeerId, { reliable: true });
         this.setupDataConnection(conn);
-        conn.on('open', () => {
-          sendPayload(conn);
-        });
-        conn.on('error', () => {
-          resolve(false);
-        });
+        conn.on('open', () => sendPayload(conn));
+        conn.on('error', () => resolve(false));
         setTimeout(() => resolve(false), 3000);
       }
     });
@@ -212,7 +195,7 @@ class PeerService {
     const current = storage.getCurrentUser();
 
     try {
-      const call = this.peer.call(targetPeerId, localStream, {
+      return this.peer.call(targetPeerId, localStream, {
         metadata: {
           caller: current,
           callerName: current.display_name,
@@ -220,7 +203,6 @@ class PeerService {
           callType,
         },
       });
-      return call;
     } catch (e) {
       console.warn('Call setup error:', e);
       return null;
