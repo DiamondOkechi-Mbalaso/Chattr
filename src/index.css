@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Chattr Orange Design System Tokens */
+    --color-chattr-orange: #ff6b00;
+    --color-chattr-orange-hover: #e65c00;
+    --color-chattr-orange-light: #ffe6d4;
+    --color-chattr-orange-glow: rgba(255, 107, 0, 0.35);
+
+    --color-link-blue: #0373e9;
+    --color-charcoal: #1c1e21;
+    --color-ink-black: #111b21;
+    --color-cream-canvas: #fcf5eb;
+    --color-pure-white: #ffffff;
+    --color-warm-gray: #5e5e5e;
+    --color-pale-blue-wash: #f0f4f9;
+    --color-chat-canvas: #efeae2;
+
+    /* Semantic Tokens */
+    --accent: #ff6b00;
+    --accent-hover: #e65c00;
+    --accent-light: #ffe6d4;
+    --accent-glow: rgba(255, 107, 0, 0.35);
+
+    --bg-main: #fcf5eb;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f0f4f9;
+    --bg-elevated: #ffffff;
+    --bg-hover: #f5efe6;
+
+    --text-primary: #111b21;
+    --text-secondary: #1c1e21;
+    --text-muted: #5e5e5e;
+
+    --border-subtle: #f0f4f9;
+    --border-strong: #1c1e21;
+
+    --bubble-sent: #ffe6d4;
+    --bubble-sent-text: #111b21;
+    --bubble-received: #ffffff;
+    --bubble-received-text: #111b21;
+
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text-primary);
+    background-color: var(--color-cream-canvas);
+  }
+
+  /* Dark Theme */
+  .theme-dark {
+    --color-cream-canvas: #0c0f14;
+    --color-pure-white: #141923;
+    --color-pale-blue-wash: #1e2638;
+    --color-charcoal: #e2e8f0;
+    --color-ink-black: #f8fafc;
+    --color-warm-gray: #94a3b8;
+    --color-chat-canvas: #090c10;
+
+    --bg-main: #0c0f14;
+    --bg-secondary: #141923;
+    --bg-tertiary: #1e2638;
+    --bg-elevated: #1f293d;
+    --bg-hover: #26334d;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #e2e8f0;
+    --text-muted: #94a3b8;
+
+    --border-subtle: #1e2638;
+    --border-strong: #334155;
+
+    --bubble-sent: #7c2d12;
+    --bubble-sent-text: #ffedd5;
+    --bubble-received: #1e2638;
+    --bubble-received-text: #f8fafc;
+
+    color: var(--text-primary);
+    background-color: var(--color-cream-canvas);
+  }
+}
+
+/* Chattr Soft Rounded Shapes & Pills */
+.rounded-pill {
+  border-radius: 50px;
+}
+
+.rounded-image {
+  border-radius: 25px;
+}
+
+.rounded-card {
+  border-radius: 16px;
+}
+
+/* Chattr Subtle Chat Background Pattern */
+.chattr-chat-bg {
+  background-color: var(--color-cream-canvas);
+  background-image: 
+    radial-gradient(#e5ddd3 1.2px, transparent 1.2px),
+    radial-gradient(#e5ddd3 1.2px, var(--color-cream-canvas) 1.2px);
+  background-size: 28px 28px;
+  background-position: 0 0, 14px 14px;
+}
+
+.theme-dark .chattr-chat-bg {
+  background-color: #0c0f14;
+  background-image: 
+    radial-gradient(#1c2333 1.2px, transparent 1.2px),
+    radial-gradient(#1c2333 1.2px, #0c0f14 1.2px);
+  background-size: 28px 28px;
+  background-position: 0 0, 14px 14px;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 107, 0, 0.2);
+  border-radius: 50px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 107, 0, 0.45);
+}
+
+/* Animations */
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ripplePulse {
+  0% { transform: scale(0.96); opacity: 0.8; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.animate-slide-up {
+  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-ripple {
+  animation: ripplePulse 1.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
