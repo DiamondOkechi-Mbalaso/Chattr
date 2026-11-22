@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User } from 'lucide-react';
+import { Mail, Lock, User, Phone } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { Modal } from '../common/Modal';
 import { storage } from '../../services/storage';
@@ -21,6 +21,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
   const toast = useToast();
 
   const allUsers = storage.getUsers();
@@ -29,10 +30,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
 
     if (mode === 'login') {
+      const searchClean = email.trim().toLowerCase();
+      const searchDigits = email.replace(/[^0-9]/g, '');
+
       const existing = allUsers.find(
         (u) =>
-          u.email.toLowerCase() === email.trim().toLowerCase() ||
-          u.username.toLowerCase() === email.trim().toLowerCase()
+          u.email.toLowerCase() === searchClean ||
+          u.username.toLowerCase() === searchClean ||
+          (searchDigits.length >= 4 && u.phone && u.phone.replace(/[^0-9]/g, '') === searchDigits)
       );
 
       if (existing) {
@@ -41,11 +46,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         toast.success(`Welcome back, ${existing.display_name}!`);
         onClose();
       } else {
+        const isPhone = searchDigits.length >= 4 && !email.includes('@');
         const newUser: UserProfile = {
           id: 'user_' + Date.now(),
-          username: email.split('@')[0].toLowerCase(),
-          display_name: email.split('@')[0],
-          email: email.trim(),
+          username: isPhone ? `phone_${searchDigits}` : email.split('@')[0].toLowerCase(),
+          display_name: isPhone ? email.trim() : email.split('@')[0],
+          email: isPhone ? `${searchDigits}@chattr.net` : email.trim(),
+          phone: isPhone ? email.trim() : undefined,
           avatar_url: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80`,
           bio: 'Hey there! I am using Chattr.',
           status_text: 'Available',
@@ -69,7 +76,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         id: 'user_' + Date.now(),
         username: username.trim().toLowerCase(),
         display_name: displayName.trim(),
-        email: email.trim(),
+        email: email.trim() || `${username.trim().toLowerCase()}@chattr.net`,
+        phone: phone.trim() || undefined,
         avatar_url: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80`,
         bio: 'Hey there! I am using Chattr.',
         status_text: 'Available ☕',
@@ -152,18 +160,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 />
               </div>
             </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#111b21] dark:text-[#f8fafc] mb-1">
+                Phone Number <span className="font-normal text-[#5e5e5e] dark:text-[#94a3b8]">(Optional - for direct calls)</span>
+              </label>
+              <div className="relative">
+                <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5e5e5e] dark:text-[#94a3b8]" />
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 000-0000"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-[#f0f4f9] dark:bg-[#1e2638] text-xs text-[#111b21] dark:text-[#f8fafc] rounded-[50px] border border-transparent focus:outline-none focus:border-[#ff6b00]"
+                />
+              </div>
+            </div>
           </>
         )}
 
         <div>
           <label className="block text-xs font-bold text-[#111b21] dark:text-[#f8fafc] mb-1">
-            Email or Username
+            {mode === 'login' ? 'Phone Number, Username, or Email' : 'Email'}
           </label>
           <div className="relative">
             <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5e5e5e] dark:text-[#94a3b8]" />
             <input
               type="text"
-              placeholder="name@chattr.app"
+              placeholder={mode === 'login' ? '+1 (555) 000-0000 or username' : 'name@chattr.app'}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-[#f0f4f9] dark:bg-[#1e2638] text-xs text-[#111b21] dark:text-[#f8fafc] rounded-[50px] border border-transparent focus:outline-none focus:border-[#ff6b00]"

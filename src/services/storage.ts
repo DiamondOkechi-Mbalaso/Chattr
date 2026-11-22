@@ -17,6 +17,7 @@ import {
   INITIAL_CALL_HISTORY,
 } from './mockData';
 import { sounds } from '../utils/sound';
+import { DEMO_PERSONAS, aiService } from './aiService';
 import { peerService } from './peerService';
 
 const STORAGE_KEYS = {
@@ -389,8 +390,8 @@ class StorageService {
     const activeConv = this.getConversations().find((item) => item.id === conversationId);
     if (activeConv && activeConv.type === 'direct') {
       const otherUser = activeConv.participants.find((p) => p.id !== current.id);
-      if (otherUser && otherUser.username) {
-        peerService.sendMessageToUser(otherUser.username, newMessage);
+      if (otherUser) {
+        peerService.sendMessageToUser(otherUser, newMessage);
       }
     }
 
@@ -406,66 +407,75 @@ class StorageService {
     const otherUser = conv.participants.find((p) => p.id !== senderId);
     if (!otherUser) return;
 
+    // Only fire for built-in demo contacts (IDs starting with known demo prefixes)
+    const isDemoContact = Object.keys(DEMO_PERSONAS).some(
+      (id) => otherUser.id === id || otherUser.id.startsWith(id)
+    );
+    if (!isDemoContact) return;
+
+    // Build conversation history for AI context
+    const history = this.getMessages(conversationId).slice(-20).map((m) => ({
+      role: (m.sender_id === senderId ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.content,
+    }));
+
+    const typingDelay = 600 + Math.random() * 500;
+    const replyDelay = typingDelay + 900 + Math.random() * 1000;
+
     setTimeout(() => {
       this.broadcast({
         type: 'TYPING_START',
         sender_id: otherUser.id,
         payload: { conversation_id: conversationId, user: otherUser },
       });
-    }, 800);
+    }, typingDelay);
 
-    setTimeout(() => {
-      this.broadcast({
-        type: 'TYPING_STOP',
-        sender_id: otherUser.id,
-        payload: { conversation_id: conversationId, user: otherUser },
-      });
+    // Call aiService (uses Gemini API if configured, or smart contextual responder)
+    aiService.generateReply(otherUser.id, history, userMessage).then((replyText) => {
+      setTimeout(() => {
+        this.broadcast({
+          type: 'TYPING_STOP',
+          sender_id: otherUser.id,
+          payload: { conversation_id: conversationId, user: otherUser },
+        });
 
-      const replyPool = [
-        `Sounds awesome! Really loving the new Chattr orange vibe. 🔥`,
-        `Checked it out — Chattr feels so smooth and instant! 🚀`,
-        `Nice! Let me know if you want to jump on a quick voice or video call on Chattr. 📞`,
-        `Got it! The glowing logo looks incredible too. ✨`,
-        `Message received loud and clear on Chattr! 😊`,
-      ];
-      const randomReply = replyPool[Math.floor(Math.random() * replyPool.length)];
+        const botMessage: Message = {
+          id: 'm_' + Date.now() + '_ai',
+          conversation_id: conversationId,
+          sender_id: otherUser.id,
+          sender: otherUser,
+          content: replyText,
+          type: 'text',
+          reactions: [],
+          is_pinned: false,
+          is_starred: false,
+          is_edited: false,
+          is_deleted: false,
+          status: 'read',
+          created_at: new Date().toISOString(),
+        };
 
-      const botMessage: Message = {
-        id: 'm_' + Date.now() + '_bot',
-        conversation_id: conversationId,
-        sender_id: otherUser.id,
-        sender: otherUser,
-        content: randomReply,
-        type: 'text',
-        reactions: [],
-        is_pinned: false,
-        is_starred: false,
-        is_edited: false,
-        is_deleted: false,
-        status: 'read',
-        created_at: new Date().toISOString(),
-      };
+        const msgs = this.getMessages(conversationId);
+        msgs.push(botMessage);
+        this.saveMessages(conversationId, msgs);
 
-      const msgs = this.getMessages(conversationId);
-      msgs.push(botMessage);
-      this.saveMessages(conversationId, msgs);
+        const convs = this.getConversations();
+        const c = convs.find((item) => item.id === conversationId);
+        if (c) {
+          c.last_message = botMessage;
+          c.updated_at = botMessage.created_at;
+          this.saveConversations(convs);
+        }
 
-      const convs = this.getConversations();
-      const c = convs.find((item) => item.id === conversationId);
-      if (c) {
-        c.last_message = botMessage;
-        c.updated_at = botMessage.created_at;
-        this.saveConversations(convs);
-      }
+        sounds.playReceived();
 
-      sounds.playReceived();
-
-      this.broadcast({
-        type: 'NEW_MESSAGE',
-        sender_id: otherUser.id,
-        payload: { conversation_id: conversationId, message: botMessage },
-      });
-    }, 2400);
+        this.broadcast({
+          type: 'NEW_MESSAGE',
+          sender_id: otherUser.id,
+          payload: { conversation_id: conversationId, message: botMessage },
+        });
+      }, replyDelay);
+    });
   }
 
   // Reactions

@@ -133,11 +133,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
-    if (otherUser && otherUser.username) {
-      peerService.sendTypingToUser(otherUser.username, true, conversation.id);
+    if (otherUser) {
+      peerService.sendTypingToUser(otherUser, true, conversation.id);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = window.setTimeout(() => {
-        peerService.sendTypingToUser(otherUser.username, false, conversation.id);
+        peerService.sendTypingToUser(otherUser, false, conversation.id);
       }, 2000);
     }
   };

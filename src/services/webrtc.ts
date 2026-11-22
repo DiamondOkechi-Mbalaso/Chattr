@@ -177,9 +177,9 @@ class WebRTCManager {
     const stream = await this.acquireMedia(type);
     sounds.startRinging();
 
-    // Try live PeerJS call to other device
-    if (recipient.username) {
-      const call = peerService.startPeerCall(recipient.username, stream, type);
+    // Try live PeerJS call to other device (by phone or username)
+    if (recipient.username || recipient.phone) {
+      const call = peerService.startPeerCall(recipient, stream, type);
       if (call) {
         this.activePeerCall = call;
         call.on('stream', (remoteStream: MediaStream) => {
@@ -201,13 +201,13 @@ class WebRTCManager {
     });
 
     // Simulate answer for built-in demo contacts only
-    const demoIds = ['user_alex', 'user_sarah', 'user_marcus', 'user_priya'];
+    const demoIds = ['user_alex', 'user_elena', 'user_marcus', 'user_sophia', 'user_liam'];
     if (demoIds.some((id) => recipient.id.startsWith(id))) {
       setTimeout(() => {
         if (this.state.status === 'calling') {
           this.simulateRemoteAnswer();
         }
-      }, 4500);
+      }, 3500);
     }
   }
 
