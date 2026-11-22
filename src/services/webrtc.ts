@@ -1,5 +1,6 @@
 // Real WebRTC Calling Engine with Multi-tab Signaling & Hardware Fallback
 import { storage } from './storage';
+import { peerService } from './peerService';
 import { UserProfile, CallType } from '../types';
 import { sounds } from '../utils/sound';
 
@@ -21,6 +22,7 @@ type CallEventCallback = (state: WebRTCState) => void;
 
 class WebRTCManager {
   private peer: RTCPeerConnection | null = null;
+  private activePeerCall: any = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
   private timer: number | null = null;
@@ -87,7 +89,7 @@ class WebRTCManager {
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 24px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(this.state.caller?.display_name || 'Nexus Live Stream', 320, 240);
+      ctx.fillText(this.state.caller?.display_name || 'Chattr Live Stream', 320, 240);
 
       ctx.fillStyle = '#94a3b8';
       ctx.font = '16px sans-serif';
@@ -134,6 +136,26 @@ class WebRTCManager {
     return synth;
   }
 
+  // Incoming peer call over internet via PeerJS
+  public handleIncomingPeerCall(mediaCall: any, caller: UserProfile, type: CallType) {
+    this.activePeerCall = mediaCall;
+    this.state = {
+      callId: 'peer_call_' + Date.now(),
+      caller,
+      recipient: storage.getCurrentUser(),
+      callType: type,
+      status: 'ringing',
+      isMuted: false,
+      isCameraOff: false,
+      isScreenSharing: false,
+      duration: 0,
+      localStream: null,
+      remoteStream: null,
+    };
+    sounds.startRinging();
+    this.notify();
+  }
+
   // Start outgoing call
   public async startCall(recipient: UserProfile, type: CallType) {
     const caller = storage.getCurrentUser();
@@ -154,8 +176,26 @@ class WebRTCManager {
     };
     this.notify();
 
-    await this.acquireMedia(type);
+    const stream = await this.acquireMedia(type);
     sounds.startRinging();
+
+    // Call remote peer via PeerJS
+    if (recipient.username) {
+      const call = peerService.startPeerCall(recipient.username, stream, type);
+      if (call) {
+        this.activePeerCall = call;
+        call.on('stream', (remoteStream: MediaStream) => {
+          sounds.stopRinging();
+          this.state.remoteStream = remoteStream;
+          this.state.status = 'connected';
+          this.startDurationTimer();
+          this.notify();
+        });
+        call.on('close', () => {
+          this.endCall();
+        });
+      }
+    }
 
     // Broadcast call offer
     storage.broadcast({
@@ -169,12 +209,14 @@ class WebRTCManager {
       },
     });
 
-    // Auto-answer simulation for demo if recipient isn't in another active tab
-    setTimeout(() => {
-      if (this.state.status === 'calling') {
-        this.simulateRemoteAnswer();
-      }
-    }, 4500);
+    // Auto-answer simulation for demo if recipient is demo contact
+    if (recipient.id.startsWith('user_alex') || recipient.id.startsWith('user_sarah') || recipient.id.startsWith('user_marcus')) {
+      setTimeout(() => {
+        if (this.state.status === 'calling') {
+          this.simulateRemoteAnswer();
+        }
+      }, 4500);
+    }
   }
 
   // Answer incoming call
@@ -182,11 +224,26 @@ class WebRTCManager {
     sounds.stopRinging();
     sounds.playCallConnected();
 
-    await this.acquireMedia(this.state.callType);
+    const stream = await this.acquireMedia(this.state.callType);
 
     this.state.status = 'connected';
     this.startDurationTimer();
     this.notify();
+
+    if (this.activePeerCall) {
+      try {
+        this.activePeerCall.answer(stream);
+        this.activePeerCall.on('stream', (remoteStream: MediaStream) => {
+          this.state.remoteStream = remoteStream;
+          this.notify();
+        });
+        this.activePeerCall.on('close', () => {
+          this.endCall();
+        });
+      } catch (e) {
+        console.warn('Peer call answer error:', e);
+      }
+    }
 
     // Broadcast answer to caller
     storage.broadcast({
@@ -340,6 +397,12 @@ class WebRTCManager {
     if (this.remoteStream) {
       this.remoteStream.getTracks().forEach((t) => t.stop());
       this.remoteStream = null;
+    }
+    if (this.activePeerCall) {
+      try {
+        this.activePeerCall.close();
+      } catch (e) {}
+      this.activePeerCall = null;
     }
     if (this.peer) {
       this.peer.close();

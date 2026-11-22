@@ -55,7 +55,7 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
       c.id === contactId ? { ...c, is_favorite: !c.is_favorite } : c
     );
     setContacts(updated);
-    localStorage.setItem('nexus_contacts', JSON.stringify(updated));
+    storage.saveContacts(updated);
     toast.success('Contact updated');
   };
 
@@ -79,21 +79,34 @@ export const ContactsView: React.FC<ContactsViewProps> = ({
       (u) => u.username.toLowerCase() === usernameClean
     );
 
-    if (!foundUser) {
-      toast.error(`User @${usernameClean} not found`);
-      return;
+    let targetUser = foundUser;
+    if (!targetUser) {
+      targetUser = {
+        id: 'user_' + usernameClean,
+        username: usernameClean,
+        display_name: usernameClean.charAt(0).toUpperCase() + usernameClean.slice(1),
+        email: `${usernameClean}@chattr.net`,
+        avatar_url: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80`,
+        bio: 'Hey there! I am using Chattr.',
+        status_text: 'Available',
+        status: 'online',
+        is_online: true,
+        last_seen: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
+      storage.upsertExternalUser(targetUser);
     }
 
-    if (contacts.some((c) => c.contact_id === foundUser.id)) {
+    if (contacts.some((c) => c.contact_id === targetUser!.id || c.contact.username.toLowerCase() === usernameClean)) {
       toast.error(`@${usernameClean} is already in your contacts`);
       return;
     }
 
-    storage.addContact(foundUser, 'General');
+    storage.addContact(targetUser, 'General');
     setContacts(storage.getContacts());
     setNewUsername('');
     setIsAddModalOpen(false);
-    toast.success(`Added @${foundUser.username} to contacts!`);
+    toast.success(`Added @${targetUser.username} to contacts!`);
   };
 
   return (

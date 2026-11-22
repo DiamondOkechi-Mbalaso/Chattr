@@ -17,6 +17,7 @@ import {
   INITIAL_CALL_HISTORY,
 } from './mockData';
 import { sounds } from '../utils/sound';
+import { peerService } from './peerService';
 
 const STORAGE_KEYS = {
   CURRENT_USER_ID: 'chattr_current_user_id',
@@ -199,6 +200,10 @@ class StorageService {
     return false;
   }
 
+  saveContacts(contacts: Contact[]) {
+    localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify(contacts));
+  }
+
   // Conversations
   getConversations(): Conversation[] {
     if (typeof window === 'undefined') return INITIAL_CONVERSATIONS;
@@ -270,6 +275,68 @@ class StorageService {
     localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(all));
   }
 
+  upsertExternalUser(user: UserProfile) {
+    const users = this.getUsers();
+    const idx = users.findIndex((u) => u.username.toLowerCase() === user.username.toLowerCase());
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...user };
+    } else {
+      users.push(user);
+    }
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+  }
+
+  receiveRemoteMessage(message: Message, senderUser: UserProfile) {
+    this.upsertExternalUser(senderUser);
+    const current = this.getCurrentUser();
+    let convs = this.getConversations();
+    let conv = convs.find(
+      (c) =>
+        c.type === 'direct' &&
+        c.participants.some(
+          (p) => p.username.toLowerCase() === senderUser.username.toLowerCase()
+        )
+    );
+
+    if (!conv) {
+      conv = this.createConversation({
+        type: 'direct',
+        name: senderUser.display_name,
+        avatar_url: senderUser.avatar_url,
+        participants: [current, senderUser],
+      });
+      convs = this.getConversations();
+    }
+
+    const messageToSave: Message = {
+      ...message,
+      conversation_id: conv.id,
+      sender: senderUser,
+    };
+
+    const messages = this.getMessages(conv.id);
+    if (!messages.some((m) => m.id === message.id)) {
+      messages.push(messageToSave);
+      this.saveMessages(conv.id, messages);
+
+      conv.last_message = messageToSave;
+      conv.unread_count = (conv.unread_count || 0) + 1;
+      conv.updated_at = messageToSave.created_at;
+
+      const filtered = convs.filter((item) => item.id !== conv!.id);
+      filtered.unshift(conv);
+      this.saveConversations(filtered);
+
+      sounds.playReceived();
+
+      this.broadcast({
+        type: 'NEW_MESSAGE',
+        sender_id: senderUser.id,
+        payload: { conversation_id: conv.id, message: messageToSave },
+      });
+    }
+  }
+
   sendMessage(
     conversationId: string,
     content: string,
@@ -317,6 +384,15 @@ class StorageService {
       sender_id: current.id,
       payload: { conversation_id: conversationId, message: newMessage },
     });
+
+    // Send to peer across the network
+    const activeConv = this.getConversations().find((item) => item.id === conversationId);
+    if (activeConv && activeConv.type === 'direct') {
+      const otherUser = activeConv.participants.find((p) => p.id !== current.id);
+      if (otherUser && otherUser.username) {
+        peerService.sendMessageToUser(otherUser.username, newMessage);
+      }
+    }
 
     this.triggerSimulatedResponse(conversationId, content, current.id);
 
@@ -476,6 +552,10 @@ class StorageService {
     }
   }
 
+  saveStatuses(statuses: StatusUpdate[]) {
+    localStorage.setItem(STORAGE_KEYS.STATUSES, JSON.stringify(statuses));
+  }
+
   // Call History
   getCallHistory(): CallHistoryRecord[] {
     if (typeof window === 'undefined') return INITIAL_CALL_HISTORY;
@@ -489,6 +569,10 @@ class StorageService {
     } catch {
       return INITIAL_CALL_HISTORY;
     }
+  }
+
+  clearCallHistory() {
+    localStorage.setItem(STORAGE_KEYS.CALL_HISTORY, JSON.stringify([]));
   }
 
   addCallHistory(call: Omit<CallHistoryRecord, 'id'>) {

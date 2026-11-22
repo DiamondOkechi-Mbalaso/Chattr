@@ -150,7 +150,7 @@ export const StatusView: React.FC = () => {
 
   const handleDeleteStatus = (id: string) => {
     const updated = statuses.filter((s) => s.id !== id);
-    localStorage.setItem('nexus_statuses', JSON.stringify(updated));
+    storage.saveStatuses(updated);
     setStatuses(updated);
     toast.success('Status deleted');
     if (activeStatus?.id === id) setActiveStatus(null);

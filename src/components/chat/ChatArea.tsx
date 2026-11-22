@@ -32,7 +32,9 @@ import {
 import { Avatar } from '../common/Avatar';
 import { MessageBubble } from './MessageBubble';
 import { VoiceNoteRecorder } from './VoiceNoteRecorder';
+import { ForwardModal } from './ForwardModal';
 import { storage } from '../../services/storage';
+import { peerService } from '../../services/peerService';
 import { webrtc } from '../../services/webrtc';
 import { useToast } from '../common/Toast';
 
@@ -71,10 +73,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
   const toast = useToast();
 
   const settings = storage.getSettings();
@@ -126,6 +130,17 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     conversation.type === 'direct'
       ? conversation.participants.find((p) => p.id !== currentUserId)
       : null;
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    if (otherUser && otherUser.username) {
+      peerService.sendTypingToUser(otherUser.username, true, conversation.id);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = window.setTimeout(() => {
+        peerService.sendTypingToUser(otherUser.username, false, conversation.id);
+      }, 2000);
+    }
+  };
 
   const handleSendMessage = () => {
     if (!inputText.trim() && pendingAttachments.length === 0) return;
@@ -273,7 +288,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   const handleForwardMessage = (message: Message) => {
-    toast.info('Forward message: Select conversation');
+    setForwardingMessage(message);
   };
 
   const handleClearChat = () => {
@@ -699,7 +714,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 ref={textareaRef}
                 rows={1}
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={
                   editingMessage
@@ -731,6 +746,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         )}
       </div>
+
+      <ForwardModal
+        isOpen={Boolean(forwardingMessage)}
+        message={forwardingMessage}
+        onClose={() => setForwardingMessage(null)}
+      />
     </div>
   );
 };

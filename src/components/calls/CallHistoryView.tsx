@@ -28,7 +28,7 @@ export const CallHistoryView: React.FC = () => {
   };
 
   const handleClear = () => {
-    localStorage.removeItem('nexus_call_history');
+    storage.clearCallHistory();
     setHistory([]);
     toast.success('Call log cleared');
   };

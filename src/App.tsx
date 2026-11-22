@@ -14,6 +14,7 @@ import { UserProfileModal } from './components/profile/UserProfileModal';
 import { GroupManagerModal } from './components/groups/GroupManagerModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { storage } from './services/storage';
+import { peerService } from './services/peerService';
 import { Conversation, UserProfile, Attachment } from './types';
 import { Lock, ArrowRight, Download } from 'lucide-react';
 
@@ -32,6 +33,12 @@ export const AppContent: React.FC = () => {
 
   useEffect(() => {
     storage.applySettingsToDOM(storage.getSettings());
+    peerService.init();
+
+    const storedUser = localStorage.getItem('chattr_current_user_id');
+    if (!storedUser) {
+      setIsAuthModalOpen(true);
+    }
 
     const unsubscribe = storage.subscribeToSync((event) => {
       if (
@@ -64,6 +71,7 @@ export const AppContent: React.FC = () => {
   const handleUserSwitch = (user: UserProfile) => {
     storage.setCurrentUser(user.id);
     setCurrentUser(user);
+    peerService.init();
     setConversations(storage.getConversations());
     setActiveConversationId(storage.getConversations()[0]?.id || null);
   };
